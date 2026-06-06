@@ -1,0 +1,48 @@
+//Build script for use with kalamake. Read more at https://github.com/kalakit/kalamake
+
+#version 1.0
+
+#references
+dir_release: build/release-
+dir_debug: build/debug-
+name_kc: kalacli
+dir_kc_rel: ../external-shared/KalaCLI/release
+dir_kc_deb: ../external-shared/KalaCLI/debug
+comm_objcopy: objcopy --remove-section .note.gnu.property
+
+#global
+compilerlauncher: ccache
+compiler: clang++
+standard: c++20
+binarytype: executable
+binaryname: coralc
+sources: "src"
+headers: "include", "../external-shared/KalaHeaders", "../external-shared/KalaCLI/include"
+defines: LIB_STATIC
+warninglevel: normal
+customflags: export-compile-commands, export-vscode-sln
+
+#profile debug-windows
+buildtype: debug
+buildpath: "${dir_debug}windows"
+links: "${dir_kc_deb}/${name_kc}d.lib"
+
+#profile release-windows
+buildtype: release
+buildpath: "${dir_release}windows"
+links: "${dir_kc_rel}/${name_kc}.lib"
+
+#profile debug-linux
+buildtype: debug
+buildpath: "${dir_debug}linux"
+links: "${dir_kc_deb}/${name_kc}d.a"
+//strips stupid avx requirements that cachyos seems to add for no reason
+postbuildaction: ${comm_objcopy} ${dir_debug}linux/${name_bin}
+
+#profile release-linux
+buildtype: release
+buildpath: "${dir_release}linux"
+links: "${dir_kc_rel}/${name_kc}.a"
+//strips stupid avx requirements that cachyos seems to add for no reason
+postbuildaction: ${comm_objcopy} ${dir_release}linux/${name_bin}
+postbuildaction: strip --strip-unneeded ${dir_release}linux/${name_bin}
