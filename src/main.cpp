@@ -25,10 +25,10 @@ static void AddExternalCommands()
 {
     auto command_compile = [](const vector<string>& params) -> void
         {
-            if (params.size() < 3)
+            if (params.size() < 2)
             {
                 Log::Print(
-                    "Command 'compile' requires atleast three arguments!",
+                    "Command 'compile' requires atleast one argument!",
                     "PARSE",
                     LogType::LOG_ERROR,
                 2);

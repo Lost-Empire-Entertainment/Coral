@@ -7,5 +7,8 @@
 
 namespace Coral
 {
-    
+    TokenData Lexer::Tokenize(const path& script)
+    {
+        return {};
+    }
 }
