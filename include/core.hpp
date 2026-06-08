@@ -13,6 +13,7 @@ namespace Coral
 {
     using std::vector;
     using std::string;
+    using std::string_view;
     using std::filesystem::path;
 
     using u8 = uint8_t;
@@ -23,6 +24,7 @@ namespace Coral
         //unassigned or missing standard version
         S_INVALID = 0u,
 
+        //Coral 2026
         S_CR26 = 1u,
 
         //always the highest possible value
@@ -74,6 +76,10 @@ namespace Coral
     class CoralCore
     {
     public:
+        static void ExitOnError(
+            string_view message,
+            string_view target);
+
         static bool IsVerbose();
         static u16 GetJobsCount();
         

@@ -10,6 +10,8 @@
 #endif
 
 #include <unordered_map>
+#include <atomic>
+#include <thread>
 
 #include "log_utils.hpp"
 #include "core_utils.hpp"
@@ -28,6 +30,7 @@ using KalaHeaders::KalaCore::EnumHash;
 
 using KalaHeaders::KalaFile::ResolveAnyPath;
 
+using Coral::CoralCore;
 using Coral::PreParseData;
 using Coral::Standard;
 using Coral::Target;
@@ -49,6 +52,9 @@ using std::filesystem::is_empty;
 using std::filesystem::recursive_directory_iterator;
 using std::exception;
 using std::unordered_map;
+using std::atomic;
+using std::thread;
+using std::memory_order_relaxed;
 
 using u16 = uint16_t;
 
@@ -105,7 +111,7 @@ static const unordered_map<Platform, string_view, EnumHash<Platform>> platforms 
     { Platform::P_CURRENT, platform_current },
     { Platform::P_WINDOWS, platform_windows },
     { Platform::P_LINUX,   platform_linux },
-    //{ Platform::P_MAC,     platform_mac }
+    //{ Platform::P_MAC,         platform_mac }
 };
 
 static const unordered_map<Architecture, string_view, EnumHash<Architecture>> architectures =
@@ -115,17 +121,6 @@ static const unordered_map<Architecture, string_view, EnumHash<Architecture>> ar
     { Architecture::A_X86, architecture_x86 },
     //{ Architecture::A_ARM, architecture_arm }
 };
-
-static void ExitOnError(string_view message)
-{
-    Log::Print(
-        message,
-        "CORE",
-        LogType::LOG_ERROR,
-        2);
-
-    exit(1);
-}
 
 static PreParseData PreParse(const vector<string>& params)
 {
@@ -144,7 +139,7 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_verbose)
         {
-            if (hasVerbose) ExitOnError("Cannot add verbose more than once!");
+            if (hasVerbose) CoralCore::ExitOnError("Cannot add verbose more than once!", "CORE");
 
             hasVerbose = true;
             isVerbose = true;
@@ -154,8 +149,8 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_jobs)
         {
-            if (jobs > 0) ExitOnError("Cannot add jobs more than once!");
-            if (i + 1 == params.size()) ExitOnError("No value was passed after jobs!");
+            if (jobs > 0) CoralCore::ExitOnError("Cannot add jobs more than once!", "CORE");
+            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after jobs!", "CORE");
             
             i++;
             p = params[i];
@@ -169,14 +164,14 @@ static PreParseData PreParse(const vector<string>& params)
                         
                         if (value == 0)
                         {
-                            ExitOnError("Jobs parameter expects atleast one job!");
+                            CoralCore::ExitOnError("Jobs parameter expects atleast one job!", "CORE");
                         }
 
-                        ExitOnError("Jobs parameter value '" + string(p) + "' exceeds uint16 bounds!");
+                        CoralCore::ExitOnError("Jobs parameter value '" + string(p) + "' exceeds uint16 bounds!", "CORE");
                     }
                     catch (const exception& e)
                     {
-                        ExitOnError("Failed to cast jobs value to integer! Reason: " + string(e.what()));
+                        CoralCore::ExitOnError("Failed to cast jobs value to integer! Reason: " + string(e.what()), "CORE");
                     }
 
                     return 1;
@@ -201,12 +196,12 @@ static PreParseData PreParse(const vector<string>& params)
         {
             if (!pdata.outputPath.empty())
             {
-                ExitOnError("Cannot add more than one output path parameter!");
+                CoralCore::ExitOnError("Cannot add more than one output path parameter!", "CORE");
             }
 
             if (i + 1 == params.size())
             {
-                ExitOnError("No value was passed after output path parameter! You must pass a path after it.");
+                CoralCore::ExitOnError("No value was passed after output path parameter! You must pass a path after it.", "CORE");
             }
 
             i++;
@@ -214,7 +209,7 @@ static PreParseData PreParse(const vector<string>& params)
             
             if (exists(p))
             {
-                ExitOnError("Output path '" + string(p) + "' already exists!");
+                CoralCore::ExitOnError("Output path '" + string(p) + "' already exists!", "CORE");
             }
 
             pdata.outputPath = p;
@@ -224,15 +219,15 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_standard)
         {
-            if (standard != Standard::S_INVALID) ExitOnError("Cannot set standard more than once!");
-            if (i + 1 == params.size()) ExitOnError("No value was passed after standard!");
+            if (standard != Standard::S_INVALID) CoralCore::ExitOnError("Cannot set standard more than once!", "CORE");
+            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after standard!", "CORE");
             
             i++;
             p = params[i];
 
             if (!ContainsValue(standards, p))
             {
-                ExitOnError("Standard '" + string(p) + "' was not found!");
+                CoralCore::ExitOnError("Standard '" + string(p) + "' was not found!", "CORE");
             }
 
             Standard out{};
@@ -252,15 +247,15 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_target)
         {
-            if (target != Target::T_INVALID) ExitOnError("Cannot set target more than once!");
-            if (i + 1 == params.size()) ExitOnError("No value was passed after target!");
+            if (target != Target::T_INVALID) CoralCore::ExitOnError("Cannot set target more than once!", "CORE");
+            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after target!", "CORE");
             
             i++;
             p = params[i];
 
             if (!ContainsValue(targets, p))
             {
-                ExitOnError("Target '" + string(p) + "' was not found!");
+                CoralCore::ExitOnError("Target '" + string(p) + "' was not found!", "CORE");
             }
 
             Target out{};
@@ -280,15 +275,15 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_platform)
         {
-            if (platform != Platform::P_INVALID) ExitOnError("Cannot set platform more than once!");
-            if (i + 1 == params.size()) ExitOnError("No value was passed after platform!");
+            if (platform != Platform::P_INVALID) CoralCore::ExitOnError("Cannot set platform more than once!", "CORE");
+            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after platform!", "CORE");
             
             i++;
             p = params[i];
 
             if (!ContainsValue(platforms, p))
             {
-                ExitOnError("Platform '" + string(p) + "' was not found!");
+                CoralCore::ExitOnError("Platform '" + string(p) + "' was not found!", "CORE");
             }
 
             Platform out{};
@@ -308,15 +303,15 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_architecture)
         {
-            if (architecture != Architecture::A_INVALID) ExitOnError("Cannot set architecture more than once!");
-            if (i + 1 == params.size()) ExitOnError("No value was passed after architecture!");
+            if (architecture != Architecture::A_INVALID) CoralCore::ExitOnError("Cannot set architecture more than once!", "CORE");
+            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after architecture!", "CORE");
             
             i++;
             p = params[i];
 
             if (!ContainsValue(architectures, p))
             {
-                ExitOnError("Architecture '" + string(p) + "' was not found!");
+                CoralCore::ExitOnError("Architecture '" + string(p) + "' was not found!", "CORE");
             }
 
             Architecture out{};
@@ -342,7 +337,7 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (!errorMessage.empty())
         {
-            ExitOnError("Failed to access path '" + string(p) + "'! Reason: " + errorMessage);
+            CoralCore::ExitOnError("Failed to access path '" + string(p) + "'! Reason: " + errorMessage, "CORE");
         }
 
         for (const auto& rp : resolvedPaths)
@@ -448,7 +443,7 @@ static PreParseData PreParse(const vector<string>& params)
 
     if (pdata.coralScripts.empty())
     {
-        ExitOnError("No valid coral scripts were found! There is nothing to compile.");
+        CoralCore::ExitOnError("No valid coral scripts were found! There is nothing to compile.", "CORE");
     }
 
     if (standard == Standard::S_INVALID)
@@ -568,6 +563,19 @@ static PreParseData PreParse(const vector<string>& params)
 
 namespace Coral
 {
+    void CoralCore::ExitOnError(
+        string_view message,
+        string_view target)
+    {
+        Log::Print(
+            message,
+            target,
+            LogType::LOG_ERROR,
+            2);
+
+        exit(1);
+    }
+
     bool CoralCore::IsVerbose() { return isVerbose; }
     u16 CoralCore::GetJobsCount() { return jobs; }
 
@@ -582,12 +590,48 @@ namespace Coral
 
     void CoralCore::Compile(const vector<string> &params)
     {
+        Log::Print(
+            "Starting to parse parameters passed to Coral.",
+            "CORE",
+            LogType::LOG_INFO);
+
         PreParseData pdata = PreParse(params);
 
-        vector<TokenData> tdata{};
-        for (const auto& script : pdata.coralScripts)
-        {
-            tdata.push_back(Lexer::Tokenize(script));
-        }
+        auto tokenize = [&pdata]() -> vector<TokenData>
+            {
+                if (pdata.coralScripts.size() == 1) return { Lexer::Tokenize(pdata.coralScripts[0]) };
+
+                u16 max_jobs = min(
+                    scast<size_t>(jobs),
+                    pdata.coralScripts.size());
+
+                atomic<int> next{};
+                vector<thread> workers{};
+                workers.reserve(max_jobs);
+                vector<TokenData> data(pdata.coralScripts.size());
+
+                for (u16 i = 0; i < max_jobs; ++i)
+                {
+                    workers.emplace_back([
+                        &next,
+                        &pdata,
+                        &data]
+                        {
+                            while (true)
+                            {
+                                size_t idx = next.fetch_add(1, memory_order_relaxed);
+                                if (idx >= pdata.coralScripts.size()) break;
+
+                                data[idx] = Lexer::Tokenize(pdata.coralScripts[idx]);
+                            }
+                        });
+                }
+
+                for (auto& w : workers) w.join();
+
+                return data;
+            };
+
+        vector<TokenData> tdata = tokenize();
     }
 }
