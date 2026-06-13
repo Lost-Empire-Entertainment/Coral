@@ -14,6 +14,7 @@
 namespace Coral
 {
     using std::string;
+    using std::string_view;
     using std::vector;
     using std::filesystem::path;
     using std::variant;
@@ -65,22 +66,23 @@ namespace Coral
         O_ASSIGN = 1u,
         O_RETURN = 2u,
 
-        O_EQUALS = 3u,
-        O_NOT_EQUALS = 4u,
-        O_PLUS_EQUALS = 5u,
-        O_MINUS_EQUALS = 6u,
-        O_MULTIPLY_EQUALS = 7u,
-        O_DIVIDE_EQUALS = 8u,
+        O_AND = 3u,
+        O_EQUALS = 4u,
+        O_NOT_EQUALS = 5u,
+        O_PLUS_EQUALS = 6u,
+        O_MINUS_EQUALS = 7u,
+        O_MULTIPLY_EQUALS = 8u,
+        O_DIVIDE_EQUALS = 9u,
 
-        O_MORE_THAN = 9u,
-        O_LESS_THAN = 10u,
-        O_MORE_AND_EQUAL = 11u,
-        O_LESS_AND_EQUAL = 12u,
+        O_MORE_THAN = 10u,
+        O_LESS_THAN = 11u,
+        O_MORE_AND_EQUAL = 12u,
+        O_LESS_AND_EQUAL = 13u,
 
-        O_ADD = 13u,
-        O_SUBTRACT = 14u,
-        O_MULTIPLY = 15u,
-        O_DIVIDE = 16u
+        O_ADD = 14u,
+        O_SUBTRACT = 15u,
+        O_MULTIPLY = 16u,
+        O_DIVIDE = 17u
     };
 
     enum class Token_Variable : u8
@@ -184,5 +186,7 @@ namespace Coral
     {
     public:
         static TokenData Tokenize(const path& script);
+
+        static string_view TokenValueToString(const TokenValue& value);
     };
 }
