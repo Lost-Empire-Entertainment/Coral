@@ -4,27 +4,28 @@
 //Read LICENSE.md for more information.
 
 #include <filesystem>
-#include <iterator>
 #include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <cctype>
 
-#include "log_utils.hpp"
 #include "file_utils.hpp"
 #include "core_utils.hpp"
+#include "log_utils.hpp"
 
 #include "lexer.hpp"
 #include "core.hpp"
-
-using KalaHeaders::KalaLog::Log;
-using KalaHeaders::KalaLog::LogType;
+#include "error.hpp"
 
 using KalaHeaders::KalaFile::ReadLinesFromFile;
 
 using KalaHeaders::KalaCore::EnumHash;
 using KalaHeaders::KalaCore::EnumToString;
 
+using KalaHeaders::KalaLog::Log;
+using KalaHeaders::KalaLog::LogType;
+
+using Coral::CoralCore;
 using Coral::TokenType;
 using Coral::TokenValue;
 using Coral::Token_Operator;
@@ -35,6 +36,8 @@ using Coral::Token_End;
 using Coral::Token_Visibility;
 using Coral::Token_Mutability;
 using Coral::Token_Jump;
+using Coral::Error;
+using Coral::ErrorType;
 
 using std::string_view;
 using std::to_string;
@@ -54,23 +57,25 @@ constexpr string_view type_visibility = "visibility";
 constexpr string_view type_mutability = "mutability";
 constexpr string_view type_jump       = "jump";
 
-constexpr string_view operator_assign       = "=";
-constexpr string_view operator_return       = ":";
-constexpr string_view operator_and          = "&&";
-constexpr string_view operator_equals       = "==";
-constexpr string_view operator_not_equals   = "!=";
-constexpr string_view operator_plus_equals  = "+=";
-constexpr string_view operator_minus_equals = "-=";
-constexpr string_view operator_multiply_eq  = "*=";
-constexpr string_view operator_divide_eq    = "/=";
-constexpr string_view operator_more_than    = ">";
-constexpr string_view operator_less_than    = "<";
-constexpr string_view operator_more_and_eq  = ">=";
-constexpr string_view operator_less_and_eq  = "<=";
-constexpr string_view operator_add          = "+";
-constexpr string_view operator_subtract     = "-";
-constexpr string_view operator_multiply     = "*";
-constexpr string_view operator_divide       = "/";
+constexpr string_view operator_add           = "@";
+constexpr string_view operator_assign        = "=";
+constexpr string_view operator_return        = ":";
+constexpr string_view operator_and           = "&&";
+constexpr string_view operator_equals        = "==";
+constexpr string_view operator_not_equals    = "!=";
+constexpr string_view operator_plus_equals   = "+=";
+constexpr string_view operator_minus_equals  = "-=";
+constexpr string_view operator_multiply_eq   = "*=";
+constexpr string_view operator_divide_eq     = "/=";
+constexpr string_view operator_more_than     = ">";
+constexpr string_view operator_less_than     = "<";
+constexpr string_view operator_more_and_eq   = ">=";
+constexpr string_view operator_less_and_eq   = "<=";
+constexpr string_view operator_plus          = "+";
+constexpr string_view operator_minus         = "-";
+constexpr string_view operator_star          = "*";
+constexpr string_view operator_forward_slash = "/";
+constexpr string_view operator_backslash     = "\\";
 
 constexpr string_view variable_int    = "int";
 constexpr string_view variable_float  = "float";
@@ -121,6 +126,8 @@ static const unordered_map<TokenType, string_view, EnumHash<TokenType>> types =
 
 static const unordered_map<Token_Operator, string_view, EnumHash<Token_Operator>> operators =
 {
+    { Token_Operator::O_ADD, operator_add },
+
     { Token_Operator::O_ASSIGN, operator_assign },
     { Token_Operator::O_RETURN, operator_return },
 
@@ -137,10 +144,11 @@ static const unordered_map<Token_Operator, string_view, EnumHash<Token_Operator>
     { Token_Operator::O_MORE_AND_EQUAL, operator_more_and_eq },
     { Token_Operator::O_LESS_AND_EQUAL, operator_less_and_eq },
 
-    { Token_Operator::O_ADD,      operator_add },
-    { Token_Operator::O_SUBTRACT, operator_subtract },
-    { Token_Operator::O_MULTIPLY, operator_multiply },
-    { Token_Operator::O_DIVIDE,   operator_divide }
+    { Token_Operator::O_PLUS,          operator_plus },
+    { Token_Operator::O_MINUS,         operator_minus },
+    { Token_Operator::O_STAR,          operator_star },
+    { Token_Operator::O_FORWARD_SLASH, operator_forward_slash },
+    { Token_Operator::O_BACKSLASH,     operator_backslash }
 };
 
 static const unordered_map<Token_Variable, string_view, EnumHash<Token_Variable>> variables =
@@ -253,7 +261,10 @@ namespace Coral
 
         if (!errorMsg.empty())
         {
-            CoralCore::ExitOnError("Failed to read lines from coral script! Reason: " + errorMsg, "LEXER");
+            Error::CloseOnError(
+                "Failed to read lines from coral script! Reason: " + errorMsg, 
+                "LEXER",
+                ErrorType::E_1001);
         }
 
         auto parse_spaces = [&lines, &script]() -> TokenData
@@ -321,10 +332,12 @@ namespace Coral
                             {
                                 if (isInMultilineComment)
                                 {
-                                    CoralCore::ExitOnError(
-                                        "Found duplicate multiline comment start "
-                                        "on line '" + to_string(linePos) + "' "
-                                        "and position '" + to_string(wordCharStart) + "'!", "LEXER");
+                                    Error::CloseOnError(
+                                        "Found duplicate multiline comment start!",
+                                        "LEXER",
+                                        ErrorType::E_1002,
+                                        linePos,
+                                        wordCharStart);
                                 }
 
                                 Log::Print(
@@ -357,10 +370,12 @@ namespace Coral
                         {
                             if (!isInMultilineComment)
                             {
-                                CoralCore::ExitOnError(
-                                    "Found multiline comment end without existing multiline comment start "
-                                    "on line '" + to_string(linePos) + "' "
-                                    "and position '" + to_string(wordCharStart) + "'!", "LEXER");
+                                Error::CloseOnError(
+                                    "Found multiline comment end without existing multiline comment start!",
+                                    "LEXER",
+                                    ErrorType::E_1003,
+                                    linePos,
+                                    wordCharStart);
                             }
 
                             isInMultilineComment = false;
@@ -410,7 +425,10 @@ namespace Coral
 
                 if (isInMultilineComment)
                 {
-                    CoralCore::ExitOnError("Script ended without multiline commend end!", "LEXER");
+                    Error::CloseOnError(
+                        "Script ended without multiline commend end!",
+                        "LEXER",
+                        ErrorType::E_1004);
                 }
 
                 return tdata;
@@ -458,10 +476,12 @@ namespace Coral
                         if (!has_any_op()
                             && t.token.find('!') == string::npos)
                         {
-                            CoralCore::ExitOnError(
-                                "Found unsupported operator symbol in token '" + t.token + "' "
-                                "on line '" + to_string(t.line) + "' "
-                                "and position '" + to_string(t.pos) + "'!", "LEXER");
+                            Error::CloseOnError(
+                                "Found unsupported operator symbol in token '" + t.token + "'!",
+                                "LEXER",
+                                ErrorType::E_1005,
+                                t.line,
+                                t.pos);
                         }
 
                         vector<Token> splitTokens{};
@@ -490,10 +510,12 @@ namespace Coral
                                         && !isalpha(t.token[i + 1])
                                         && t.token[i + 1] != '=')
                                     {
-                                        CoralCore::ExitOnError(
-                                            "Found unsupported exclamation mark structure "
-                                            "on line '" + to_string(t.line) + "' "
-                                            "and position '" + to_string(t.pos) + "'!", "LEXER");
+                                        Error::CloseOnError(
+                                            "Found unsupported exclamation mark structure in token '" + t.token + "'!",
+                                            "LEXER",
+                                            ErrorType::E_1006,
+                                            t.line,
+                                            t.pos);
                                     }
 
                                     if (!isalnum(t.token[i + 1]))
@@ -503,10 +525,12 @@ namespace Coral
                                         if (c == '!'
                                             && doubleOp != operator_not_equals)
                                         {
-                                            CoralCore::ExitOnError(
-                                                "Found unsupported exclamation mark structure "
-                                                "on line '" + to_string(t.line) + "' "
-                                                "and position '" + to_string(t.pos) + "'!", "LEXER");
+                                            Error::CloseOnError(
+                                                "Found unsupported exclamation mark structure in token '" + t.token + "'!",
+                                                "LEXER",
+                                                ErrorType::E_1006,
+                                                t.line,
+                                                t.pos);
                                         }
 
                                         auto is_double_op = [&doubleOp]() -> bool
@@ -625,15 +649,13 @@ namespace Coral
                             string_view tt{};
                             EnumToString(t.tokenType, types, tt);
 
-                            string_view tv = TokenValueToString(t.tokenValue);
-
                             Log::Print(
                                 "Token '" + t.token + "' "
                                 "at line '" + to_string(t.line) + "' "
                                 "and pos '" + to_string(t.pos) + "' "
-                                "has type '" + string(tt) + "' and value '" + string(tv) + "'.",
+                                "has type '" + string(tt) + "'.",
                                 "LEXER",
-                                LogType::LOG_INFO);
+                                LogType::LOG_VERBOSE);
                         }
                     }
                     else
@@ -651,7 +673,7 @@ namespace Coral
                                 "and pos '" + to_string(t.pos) + "' "
                                 "has type '" + string(tt) + "'.",
                                 "LEXER",
-                                LogType::LOG_INFO);
+                                LogType::LOG_VERBOSE);
                         }
                         else
                         {
@@ -663,7 +685,7 @@ namespace Coral
                                     "and pos '" + to_string(t.pos) + "' "
                                     "is a value or identifier, type will be assigned at the parser stage.",
                                     "LEXER",
-                                    LogType::LOG_INFO);
+                                    LogType::LOG_VERBOSE);
                             }
                         }
                     }
@@ -671,11 +693,6 @@ namespace Coral
             };
 
         assign_token_types();
-
-        Log::Print(
-            "Finished tokenizing '" + relative + "'!",
-            "LEXER",
-            LogType::LOG_SUCCESS);
 
         return tdata;
     }

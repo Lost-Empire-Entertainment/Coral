@@ -13,15 +13,13 @@
 #include <atomic>
 #include <thread>
 
-#include "log_utils.hpp"
 #include "core_utils.hpp"
 #include "file_utils.hpp"
+#include "log_utils.hpp"
 
 #include "core.hpp"
 #include "lexer.hpp"
-
-using KalaHeaders::KalaLog::Log;
-using KalaHeaders::KalaLog::LogType;
+#include "error.hpp"
 
 using KalaHeaders::KalaCore::StringToEnum;
 using KalaHeaders::KalaCore::EnumToString;
@@ -29,6 +27,9 @@ using KalaHeaders::KalaCore::ContainsValue;
 using KalaHeaders::KalaCore::EnumHash;
 
 using KalaHeaders::KalaFile::ResolveAnyPath;
+
+using KalaHeaders::KalaLog::Log;
+using KalaHeaders::KalaLog::LogType;
 
 using Coral::CoralCore;
 using Coral::PreParseData;
@@ -38,6 +39,8 @@ using Coral::Platform;
 using Coral::Architecture;
 using Coral::TokenData;
 using Coral::Lexer;
+using Coral::Error;
+using Coral::ErrorType;
 
 using std::vector;
 using std::string;
@@ -139,7 +142,13 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_verbose)
         {
-            if (hasVerbose) CoralCore::ExitOnError("Cannot add verbose more than once!", "CORE");
+            if (hasVerbose)
+            {
+                Error::CloseOnError(
+                    "Cannot add verbose more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
+            }
 
             hasVerbose = true;
             isVerbose = true;
@@ -149,8 +158,20 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_jobs)
         {
-            if (jobs > 0) CoralCore::ExitOnError("Cannot add jobs more than once!", "CORE");
-            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after jobs!", "CORE");
+            if (jobs > 0)
+            {
+                Error::CloseOnError(
+                    "Cannot add jobs more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
+            }
+            if (i + 1 == params.size())
+            {
+                Error::CloseOnError(
+                    "No value was passed after jobs!",
+                    "CORE",
+                    ErrorType::E_0002);
+            }
             
             i++;
             p = params[i];
@@ -160,18 +181,29 @@ static PreParseData PreParse(const vector<string>& params)
                     try 
                     {
                         int value = stoi(string(p));
-                        if (value > 0 && value < UINT16_MAX) return value;
-                        
-                        if (value == 0)
-                        {
-                            CoralCore::ExitOnError("Jobs parameter expects atleast one job!", "CORE");
-                        }
 
-                        CoralCore::ExitOnError("Jobs parameter value '" + string(p) + "' exceeds uint16 bounds!", "CORE");
+                        if (value > 0 && value <= UINT16_MAX) return value;
+                        else if (value == 0)
+                        {
+                            Error::CloseOnError(
+                                "Jobs parameter expects atleast one job!",
+                                "CORE",
+                                ErrorType::E_0003);
+                        }
+                        else
+                        {
+                            Error::CloseOnError(
+                                "Jobs parameter value '" + string(p) + "' exceeds uint16 bounds!", 
+                                "CORE",
+                                ErrorType::E_0004);
+                        }
                     }
                     catch (const exception& e)
                     {
-                        CoralCore::ExitOnError("Failed to cast jobs value to integer! Reason: " + string(e.what()), "CORE");
+                        Error::CloseOnError(
+                            "Failed to cast jobs value to integer! Reason: " + string(e.what()), 
+                            "CORE",
+                            ErrorType::E_0005);
                     }
 
                     return 1;
@@ -196,12 +228,18 @@ static PreParseData PreParse(const vector<string>& params)
         {
             if (!pdata.outputPath.empty())
             {
-                CoralCore::ExitOnError("Cannot add more than one output path parameter!", "CORE");
+                Error::CloseOnError(
+                    "Cannot add output path more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
             }
 
             if (i + 1 == params.size())
             {
-                CoralCore::ExitOnError("No value was passed after output path parameter! You must pass a path after it.", "CORE");
+                Error::CloseOnError(
+                    "No value was passed after output path parameter!",
+                    "CORE",
+                    ErrorType::E_0002);
             }
 
             i++;
@@ -209,7 +247,10 @@ static PreParseData PreParse(const vector<string>& params)
             
             if (exists(p))
             {
-                CoralCore::ExitOnError("Output path '" + string(p) + "' already exists!", "CORE");
+                Error::CloseOnError(
+                    "Output path '" + string(p) + "' already exists!",
+                    "CORE",
+                    ErrorType::E_0006);
             }
 
             pdata.outputPath = p;
@@ -219,15 +260,30 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_standard)
         {
-            if (standard != Standard::S_INVALID) CoralCore::ExitOnError("Cannot set standard more than once!", "CORE");
-            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after standard!", "CORE");
+            if (standard != Standard::S_INVALID)
+            {
+                Error::CloseOnError(
+                    "Cannot add standard more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
+            }
+            if (i + 1 == params.size())
+            {
+                Error::CloseOnError(
+                    "No value was passed after standard!",
+                    "CORE",
+                    ErrorType::E_0002);
+            }
             
             i++;
             p = params[i];
 
             if (!ContainsValue(standards, p))
             {
-                CoralCore::ExitOnError("Standard '" + string(p) + "' was not found!", "CORE");
+                Error::CloseOnError(
+                    "Standard '" + string(p) + "' was not found!",
+                    "CORE",
+                    ErrorType::E_0007);
             }
 
             Standard out{};
@@ -247,15 +303,30 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_target)
         {
-            if (target != Target::T_INVALID) CoralCore::ExitOnError("Cannot set target more than once!", "CORE");
-            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after target!", "CORE");
+            if (target != Target::T_INVALID)
+            {
+                Error::CloseOnError(
+                    "Cannot add target more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
+            }
+            if (i + 1 == params.size())
+            {
+                Error::CloseOnError(
+                    "No value was passed after target!",
+                    "CORE",
+                    ErrorType::E_0002);
+            }
             
             i++;
             p = params[i];
 
             if (!ContainsValue(targets, p))
             {
-                CoralCore::ExitOnError("Target '" + string(p) + "' was not found!", "CORE");
+                Error::CloseOnError(
+                    "Target '" + string(p) + "' was not found!",
+                    "CORE",
+                    ErrorType::E_0007);
             }
 
             Target out{};
@@ -275,15 +346,30 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_platform)
         {
-            if (platform != Platform::P_INVALID) CoralCore::ExitOnError("Cannot set platform more than once!", "CORE");
-            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after platform!", "CORE");
+            if (platform != Platform::P_INVALID)
+            {
+                Error::CloseOnError(
+                    "Cannot add platform more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
+            }
+            if (i + 1 == params.size())
+            {
+                Error::CloseOnError(
+                    "No value was passed after platform!",
+                    "CORE",
+                    ErrorType::E_0002);
+            }
             
             i++;
             p = params[i];
 
             if (!ContainsValue(platforms, p))
             {
-                CoralCore::ExitOnError("Platform '" + string(p) + "' was not found!", "CORE");
+                Error::CloseOnError(
+                    "Platform '" + string(p) + "' was not found!",
+                    "CORE",
+                    ErrorType::E_0007);
             }
 
             Platform out{};
@@ -303,15 +389,30 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (p == param_architecture)
         {
-            if (architecture != Architecture::A_INVALID) CoralCore::ExitOnError("Cannot set architecture more than once!", "CORE");
-            if (i + 1 == params.size()) CoralCore::ExitOnError("No value was passed after architecture!", "CORE");
+            if (architecture != Architecture::A_INVALID)
+            {
+                Error::CloseOnError(
+                    "Cannot add architecture more than once!",
+                    "CORE",
+                    ErrorType::E_0001);
+            }
+            if (i + 1 == params.size())
+            {
+                Error::CloseOnError(
+                    "No value was passed after architecture!",
+                    "CORE",
+                    ErrorType::E_0002);
+            }
             
             i++;
             p = params[i];
 
             if (!ContainsValue(architectures, p))
             {
-                CoralCore::ExitOnError("Architecture '" + string(p) + "' was not found!", "CORE");
+                Error::CloseOnError(
+                    "Architecture '" + string(p) + "' was not found!",
+                    "CORE",
+                    ErrorType::E_0007);
             }
 
             Architecture out{};
@@ -337,7 +438,10 @@ static PreParseData PreParse(const vector<string>& params)
 
         if (!errorMessage.empty())
         {
-            CoralCore::ExitOnError("Failed to access path '" + string(p) + "'! Reason: " + errorMessage, "CORE");
+            Error::CloseOnError(
+                "Failed to access path '" + string(p) + "'! Reason: " + errorMessage,
+                "CORE",
+                ErrorType::E_0008);
         }
 
         for (const auto& rp : resolvedPaths)
@@ -443,7 +547,10 @@ static PreParseData PreParse(const vector<string>& params)
 
     if (pdata.coralScripts.empty())
     {
-        CoralCore::ExitOnError("No valid coral scripts were found! There is nothing to compile.", "CORE");
+        Error::CloseOnError(
+            "No valid coral scripts were found! There is nothing to compile.",
+            "CORE",
+            ErrorType::E_0009);
     }
 
     if (standard == Standard::S_INVALID)
@@ -563,19 +670,6 @@ static PreParseData PreParse(const vector<string>& params)
 
 namespace Coral
 {
-    void CoralCore::ExitOnError(
-        string_view message,
-        string_view target)
-    {
-        Log::Print(
-            message,
-            target,
-            LogType::LOG_ERROR,
-            2);
-
-        exit(1);
-    }
-
     bool CoralCore::IsVerbose() { return isVerbose; }
     u16 CoralCore::GetJobsCount() { return jobs; }
 

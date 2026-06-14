@@ -63,26 +63,29 @@ namespace Coral
     {
         O_INVALID = 0u,
 
-        O_ASSIGN = 1u,
-        O_RETURN = 2u,
+        O_ADD = 1u,
 
-        O_AND = 3u,
-        O_EQUALS = 4u,
-        O_NOT_EQUALS = 5u,
-        O_PLUS_EQUALS = 6u,
-        O_MINUS_EQUALS = 7u,
-        O_MULTIPLY_EQUALS = 8u,
-        O_DIVIDE_EQUALS = 9u,
+        O_ASSIGN = 2u,
+        O_RETURN = 3u,
 
-        O_MORE_THAN = 10u,
-        O_LESS_THAN = 11u,
-        O_MORE_AND_EQUAL = 12u,
-        O_LESS_AND_EQUAL = 13u,
+        O_AND = 4u,
+        O_EQUALS = 5u,
+        O_NOT_EQUALS = 6u,
+        O_PLUS_EQUALS = 7u,
+        O_MINUS_EQUALS = 8u,
+        O_MULTIPLY_EQUALS = 9u,
+        O_DIVIDE_EQUALS = 10u,
 
-        O_ADD = 14u,
-        O_SUBTRACT = 15u,
-        O_MULTIPLY = 16u,
-        O_DIVIDE = 17u
+        O_MORE_THAN = 11u,
+        O_LESS_THAN = 12u,
+        O_MORE_AND_EQUAL = 13u,
+        O_LESS_AND_EQUAL = 14u,
+
+        O_PLUS = 15u,
+        O_MINUS = 16u,
+        O_STAR = 17u,
+        O_FORWARD_SLASH = 18u,
+        O_BACKSLASH = 19u
     };
 
     enum class Token_Variable : u8

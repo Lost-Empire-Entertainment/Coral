@@ -76,10 +76,6 @@ namespace Coral
     class CoralCore
     {
     public:
-        static void ExitOnError(
-            string_view message,
-            string_view target);
-
         static bool IsVerbose();
         static u16 GetJobsCount();
         
