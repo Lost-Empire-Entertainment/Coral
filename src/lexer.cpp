@@ -704,7 +704,8 @@ namespace Coral
 
                         if (allDigits) return true;
 
-                        return isdigit(value[0])
+                        return 
+                            isdigit(value[0])
                             && value.find('.') != string::npos;
                     };
 
