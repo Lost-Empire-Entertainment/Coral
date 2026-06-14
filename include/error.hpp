@@ -58,10 +58,14 @@ namespace Coral
         //Script ended without multiline command end
         E_1004 = 1004u,
 
-        //Found unsupported operator symbol in token ...
-        E_1005 = 1005u,
         //Found unsupported exclamation structure in token ...
+        E_1005 = 1005u,
+        //Found invalid operator ...
         E_1006 = 1006u,
+        //Found ... symbol in an unsupported position in token ...
+        E_1007 = 1007u,
+        //Value ... cannot contain more than one dot
+        E_1008 = 1008u,
 
         //
         // 2*** - errors in parser.cpp

@@ -21,6 +21,7 @@ using KalaHeaders::KalaFile::ReadLinesFromFile;
 
 using KalaHeaders::KalaCore::EnumHash;
 using KalaHeaders::KalaCore::EnumToString;
+using KalaHeaders::KalaCore::ContainsValue;
 
 using KalaHeaders::KalaLog::Log;
 using KalaHeaders::KalaLog::LogType;
@@ -434,14 +435,23 @@ namespace Coral
                 return tdata;
             };
 
-        TokenData tdata = parse_spaces();
+        TokenData tdata_spaces = parse_spaces();
 
-        auto parse_operators = [&tdata]() -> TokenData
+        auto parse_quotes = [&tdata_spaces] -> TokenData
             {
-                TokenData opTokenData{};
-                opTokenData.scriptPath = tdata.scriptPath;
+                TokenData tdata_quotes = tdata_spaces;
 
-                for (auto& t : tdata.tokens)
+                return tdata_quotes;
+            };
+
+        TokenData tdata_quotes = parse_quotes();
+
+        auto parse_operators = [&tdata_quotes]() -> TokenData
+            {
+                TokenData tdata_ops{};
+                tdata_ops.scriptPath = tdata_quotes.scriptPath;
+
+                for (auto& t : tdata_quotes.tokens)
                 {
 #ifdef KDEBUG
                     Log::Print(" ");
@@ -461,29 +471,8 @@ namespace Coral
                             return false;
                         };
 
-                    auto has_any_op = [&t]() -> bool
-                        {
-                            for (const auto& [_, v] : operators)
-                            {
-                                return t.token.find(v) != string::npos;
-                            }
-
-                            return false;
-                        };
-
                     if (has_any_symbols())
                     {
-                        if (!has_any_op()
-                            && t.token.find('!') == string::npos)
-                        {
-                            Error::CloseOnError(
-                                "Found unsupported operator symbol in token '" + t.token + "'!",
-                                "LEXER",
-                                ErrorType::E_1005,
-                                t.line,
-                                t.pos);
-                        }
-
                         vector<Token> splitTokens{};
                         Token splitToken{};
                         splitToken.line = t.line;
@@ -494,7 +483,13 @@ namespace Coral
                         {
                             char c = t.token[i];
 
-                            if (!isalnum(c))
+                            bool isValidPrefixNegation = (
+                                c == '!'
+                                && i + 1 < t.token.size()
+                                && isalpha(t.token[i + 1]));
+
+                            if (!isalnum(c)
+                                && !isValidPrefixNegation)
                             {
                                 if (!splitToken.token.empty())
                                 {
@@ -506,18 +501,6 @@ namespace Coral
 
                                 if (i + 1 != t.token.size())
                                 {
-                                    if (c == '!'
-                                        && !isalpha(t.token[i + 1])
-                                        && t.token[i + 1] != '=')
-                                    {
-                                        Error::CloseOnError(
-                                            "Found unsupported exclamation mark structure in token '" + t.token + "'!",
-                                            "LEXER",
-                                            ErrorType::E_1006,
-                                            t.line,
-                                            t.pos);
-                                    }
-
                                     if (!isalnum(t.token[i + 1]))
                                     {
                                         string doubleOp = { c, t.token[i + 1] };
@@ -528,24 +511,22 @@ namespace Coral
                                             Error::CloseOnError(
                                                 "Found unsupported exclamation mark structure in token '" + t.token + "'!",
                                                 "LEXER",
-                                                ErrorType::E_1006,
+                                                ErrorType::E_1005,
                                                 t.line,
                                                 t.pos);
                                         }
 
-                                        auto is_double_op = [&doubleOp]() -> bool
-                                            {
-                                                return doubleOp == operator_equals
-                                                    || doubleOp == operator_not_equals
-                                                    || doubleOp == operator_plus_equals
-                                                    || doubleOp == operator_minus_equals
-                                                    || doubleOp == operator_multiply_eq
-                                                    || doubleOp == operator_divide_eq
-                                                    || doubleOp == operator_more_and_eq
-                                                    || doubleOp == operator_less_and_eq;
-                                            };
+                                        bool isDoubleOp = 
+                                            (doubleOp == operator_equals
+                                            || doubleOp == operator_not_equals
+                                            || doubleOp == operator_plus_equals
+                                            || doubleOp == operator_minus_equals
+                                            || doubleOp == operator_multiply_eq
+                                            || doubleOp == operator_divide_eq
+                                            || doubleOp == operator_more_and_eq
+                                            || doubleOp == operator_less_and_eq);
 
-                                        if (is_double_op())
+                                        if (isDoubleOp)
                                         {
                                             splitTokens.push_back({
                                                 .line = t.line,
@@ -591,24 +572,123 @@ namespace Coral
                             splitToken.token.clear();
                         }
 
-                        opTokenData.tokens.insert(
-                            opTokenData.tokens.end(),
+                        for (const auto& t : splitTokens)
+                        {
+                            if (t.token[0] != '!'
+                                && !isalnum(t.token[0])
+                                && !ContainsValue(operators, t.token))
+                            {
+                                Error::CloseOnError(
+                                    "Found invalid operator '" + t.token + "'!",
+                                    "LEXER",
+                                    ErrorType::E_1006,
+                                    t.line,
+                                    t.pos);
+                            }
+                        }
+
+                        tdata_ops.tokens.insert(
+                            tdata_ops.tokens.end(),
                             make_move_iterator(splitTokens.begin()),
                             make_move_iterator(splitTokens.end()));
                     }
                     else 
                     {
-                        opTokenData.tokens.push_back(t);
+                        tdata_ops.tokens.push_back(t);
                         continue;
                     }
                 }
 
-                return opTokenData;
+                for (const auto& t : tdata_ops.tokens)
+                {
+                    bool startsWithDigit{};
+                    bool containsDot{};
+
+                    for (size_t i = 0; i < t.token.size(); i++)
+                    {
+                        char c = t.token[i];
+
+                        if (c == '!'
+                            && i != 0)
+                        {
+                            Error::CloseOnError(
+                                "Found exclamation symbol in an unsupported position in token '" + t.token + "'!",
+                                "LEXER",
+                                ErrorType::E_1007,
+                                t.line,
+                                t.pos);
+                        }
+                        
+                        if (c == '.'
+                            && (i == 0
+                            || i == t.token.size() - 1))
+                        {
+                            Error::CloseOnError(
+                                "Found dot symbol in an unsupported position in token '" + t.token + "'!",
+                                "LEXER",
+                                ErrorType::E_1007,
+                                t.line,
+                                t.pos);
+                        }
+
+                        if (c == '.')
+                        {
+                            if (containsDot
+                                && (t.token[i - 1] == '.'
+                                || (i + 1 != t.token.size()
+                                && t.token[i + 1] == '.')))
+                            {
+                                Error::CloseOnError(
+                                    "Found dot symbol in an unsupported position in token '" + t.token + "'!",
+                                    "LEXER",
+                                    ErrorType::E_1007,
+                                    t.line,
+                                    t.pos);
+                            }
+
+                            containsDot = true;
+                        }
+
+                        if (i == 0
+                            && isdigit(c)
+                            && t.token.size() != 1)
+                        {
+                            startsWithDigit = true;
+                        }
+
+                        if (startsWithDigit
+                            && i + 1 != t.token.size()
+                            && c != '.'
+                            && !isdigit(t.token[i + 1]))
+                        {
+                            Error::CloseOnError(
+                                "Found symbol or number in an unsupported position in token '" + t.token + "'!",
+                                "LEXER",
+                                ErrorType::E_1007,
+                                t.line,
+                                t.pos);
+                        }
+
+                        if (startsWithDigit
+                            && containsDot
+                            && c == '.')
+                        {
+                            Error::CloseOnError(
+                                "Value '" + t.token + "' cannot contain more than one dot!",
+                                "LEXER",
+                                ErrorType::E_1008,
+                                t.line,
+                                t.pos);
+                        }
+                    }
+                }
+
+                return tdata_ops;
             };
 
-        TokenData opTokenData = parse_operators();
+        TokenData tdata_ops = parse_operators();
 
-        auto assign_token_types = [&opTokenData]() -> void
+        auto assign_token_types = [&tdata_ops]() -> void
             {
                 auto is_digit = [](string_view value) -> bool
                     {
@@ -628,7 +708,7 @@ namespace Coral
                             && value.find('.') != string::npos;
                     };
 
-                for (auto& t : opTokenData.tokens)
+                for (auto& t : tdata_ops.tokens)
                 {
 #ifdef KDEBUG
                     Log::Print(" ");
@@ -694,6 +774,6 @@ namespace Coral
 
         assign_token_types();
 
-        return tdata;
+        return tdata_ops;
     }
 }

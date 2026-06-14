@@ -40,6 +40,8 @@ constexpr string_view e_1003 = "E1003";
 constexpr string_view e_1004 = "E1004";
 constexpr string_view e_1005 = "E1005";
 constexpr string_view e_1006 = "E1006";
+constexpr string_view e_1007 = "E1007";
+constexpr string_view e_1008 = "E1008";
 
 static unordered_map<ErrorType, string_view, EnumHash<ErrorType>> errorTypes
 {
@@ -58,7 +60,9 @@ static unordered_map<ErrorType, string_view, EnumHash<ErrorType>> errorTypes
     { ErrorType::E_1003, e_1003 },
     { ErrorType::E_1004, e_1004 },
     { ErrorType::E_1005, e_1005 },
-    { ErrorType::E_1006, e_1006 }
+    { ErrorType::E_1006, e_1006 },
+    { ErrorType::E_1007, e_1007 },
+    { ErrorType::E_1008, e_1008 }
 };
 
 namespace Coral
